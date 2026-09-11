@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>StorageBox</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="app-shell">
+    <header class="topbar">
+      <button class="icon-btn sidebar-toggle" id="sidebar-toggle" aria-label="Toggle directory tree">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 6h16M4 12h16M4 18h10" stroke-linecap="round"/></svg>
+      </button>
+      <a class="brand" href="/browse/" data-nav-root>
+        <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path d="M3 7l2-3h5l2 3h9v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7z" stroke-linejoin="round" />
+        </svg>
+        <span id="site-title">StorageBox</span>
+      </a>
+      <nav class="breadcrumbs" id="breadcrumbs" aria-label="Breadcrumb"></nav>
+      <div class="topbar-spacer"></div>
+      <div class="view-toggle" id="view-toggle" role="group" aria-label="View mode">
+        <button class="view-btn" data-view="grid" aria-label="Grid view" title="Grid view">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
+        </button>
+        <button class="view-btn" data-view="list" aria-label="List view" title="List view">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4.5" width="18" height="3.5" rx="1"/><rect x="3" y="10.25" width="18" height="3.5" rx="1"/><rect x="3" y="16" width="18" height="3.5" rx="1"/></svg>
+        </button>
+      </div>
+    </header>
+
+    <div class="app-body">
+      <aside class="sidebar" id="sidebar">
+        <div class="sidebar-label">Directories</div>
+        <div class="tree" id="tree"></div>
+      </aside>
+
+      <main class="content" id="content">
+        <div class="state-msg" id="state-msg" hidden></div>
+        <div class="skeleton-grid" id="skeleton" hidden>
+          <div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div>
+          <div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div>
+          <div class="skeleton-card"></div><div class="skeleton-card"></div><div class="skeleton-card"></div>
+        </div>
+        <div class="entry-container view-grid" id="entry-grid"></div>
+      </main>
+    </div>
+  </div>
+  <div class="sidebar-backdrop" id="sidebar-backdrop"></div>
+
+  <!-- Right-click / more-options context menu -->
+  <div class="context-menu" id="context-menu" hidden role="menu"></div>
+
+  <!-- Info panel -->
+  <div class="info-backdrop" id="info-backdrop" hidden></div>
+  <aside class="info-panel" id="info-panel" hidden aria-label="File info">
+    <button class="modal-close" id="info-close" aria-label="Close info panel">&times;</button>
+    <div class="info-visual" id="info-visual"></div>
+    <h2 class="info-name" id="info-name"></h2>
+    <div class="info-rows" id="info-rows"></div>
+    <div class="info-actions" id="info-actions"></div>
+  </aside>
+
+  <!-- Lightbox for images -->
+  <div class="modal-overlay" id="lightbox" hidden>
+    <button class="modal-close" id="lightbox-close" aria-label="Close">&times;</button>
+    <button class="lightbox-nav lightbox-prev" id="lightbox-prev" aria-label="Previous image">&#8249;</button>
+    <img class="lightbox-img" id="lightbox-img" alt="" />
+    <button class="lightbox-nav lightbox-next" id="lightbox-next" aria-label="Next image">&#8250;</button>
+    <div class="lightbox-caption" id="lightbox-caption"></div>
+  </div>
+
+  <!-- Video player modal -->
+  <div class="modal-overlay" id="video-modal" hidden>
+    <button class="modal-close" id="video-close" aria-label="Close">&times;</button>
+    <div class="video-wrap">
+      <video id="video-player" controls autoplay></video>
+      <div class="lightbox-caption" id="video-caption"></div>
+    </div>
+  </div>
+
+  <!-- Text/PDF viewer modal -->
+  <div class="modal-overlay" id="doc-modal" hidden>
+    <button class="modal-close" id="doc-close" aria-label="Close">&times;</button>
+    <div class="doc-wrap">
+      <div class="doc-title" id="doc-title"></div>
+      <iframe class="doc-frame" id="doc-frame" hidden title="Document preview"></iframe>
+      <pre class="doc-text" id="doc-text" hidden></pre>
+    </div>
+  </div>
+
+  <!-- Persistent audio player -->
+  <div class="audio-bar" id="audio-bar" hidden>
+    <div class="audio-track-info">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" class="audio-icon">
+        <path d="M9 18V5l12-2v13" stroke-linecap="round" stroke-linejoin="round" />
+        <circle cx="6" cy="18" r="3" />
+        <circle cx="18" cy="16" r="3" />
+      </svg>
+      <div class="audio-track-name" id="audio-track-name">&mdash;</div>
+    </div>
+    <div class="audio-controls">
+      <button id="audio-prev" aria-label="Previous track">&#9198;</button>
+      <button id="audio-playpause" aria-label="Play or pause">&#9654;</button>
+      <button id="audio-next" aria-label="Next track">&#9197;</button>
+    </div>
+    <div class="audio-seek">
+      <span class="audio-time" id="audio-current-time">0:00</span>
+      <input type="range" id="audio-seek-bar" min="0" max="100" value="0" step="0.1" />
+      <span class="audio-time" id="audio-duration">0:00</span>
+    </div>
+    <div class="audio-volume">
+      <input type="range" id="audio-volume" min="0" max="1" value="1" step="0.01" />
+    </div>
+    <button class="audio-close" id="audio-close" aria-label="Close player">&times;</button>
+  </div>
+  <audio id="audio-element" preload="metadata"></audio>
+
+  <script src="/app.js"></script>
+</body>
+</html>

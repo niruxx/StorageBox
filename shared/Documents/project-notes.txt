@@ -1,0 +1,9 @@
+StorageBox project notes
+=========================
+
+- Point config.json at any folder and it shows up here automatically.
+- Nothing in this view can be uploaded, renamed, or deleted — it's read-only.
+- Text files like this one preview inline instead of downloading.
+
+Feel free to replace the contents of shared/ with your own files once
+you're done trying things out.

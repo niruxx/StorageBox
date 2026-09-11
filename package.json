@@ -1,0 +1,18 @@
+{
+  "name": "storagebox-opendirectory",
+  "version": "1.0.0",
+  "description": "Self-hosted, read-only directory browser with inline preview/playback for images, video, audio and documents.",
+  "main": "server/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server/index.js",
+    "dev": "node --watch server/index.js"
+  },
+  "license": "MIT",
+  "dependencies": {
+    "express": "^4.19.2"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
