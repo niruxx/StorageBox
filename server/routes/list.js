@@ -17,7 +17,7 @@ function safeResolve(rootDir, relPath) {
   return absolute;
 }
 
-function buildListRouter(rootDir) {
+function buildListRouter(rootDir, isWritable = () => false) {
   const router = express.Router();
 
   router.get(/^\/(.*)$/, (req, res) => {
@@ -64,7 +64,8 @@ function buildListRouter(rootDir) {
               category: dirent.isDirectory() ? 'directory' : categoryFor(dirent.name),
               size,
               modified,
-              path: entryRelPath
+              path: entryRelPath,
+              writable: isWritable(entryRelPath)
             };
           })
           .filter(Boolean)
@@ -83,7 +84,8 @@ function buildListRouter(rootDir) {
         res.json({
           path: cleanRelPath,
           breadcrumbs,
-          entries
+          entries,
+          writable: isWritable(cleanRelPath)
         });
       });
     });

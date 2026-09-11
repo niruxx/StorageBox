@@ -20,6 +20,11 @@
       </a>
       <nav class="breadcrumbs" id="breadcrumbs" aria-label="Breadcrumb"></nav>
       <div class="topbar-spacer"></div>
+      <button class="upload-btn" id="upload-btn" type="button" hidden title="Upload files" aria-label="Upload files">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 16V4M7 9l5-5 5 5M4 20h16" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        <span>Upload</span>
+      </button>
+      <input type="file" id="upload-input" multiple hidden />
       <div class="view-toggle" id="view-toggle" role="group" aria-label="View mode">
         <button class="view-btn" data-view="grid" aria-label="Grid view" title="Grid view">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/></svg>
@@ -84,9 +89,27 @@
   <div class="modal-overlay" id="doc-modal" hidden>
     <button class="modal-close" id="doc-close" aria-label="Close">&times;</button>
     <div class="doc-wrap">
-      <div class="doc-title" id="doc-title"></div>
+      <div class="doc-header">
+        <div class="doc-title" id="doc-title"></div>
+        <button class="doc-edit-btn" id="doc-edit-btn" type="button" hidden>Edit</button>
+      </div>
       <iframe class="doc-frame" id="doc-frame" hidden title="Document preview"></iframe>
       <pre class="doc-text" id="doc-text" hidden></pre>
+    </div>
+  </div>
+
+  <!-- Text/code editor -->
+  <div class="modal-overlay" id="editor-modal" hidden>
+    <button class="modal-close" id="editor-close" aria-label="Close">&times;</button>
+    <div class="editor-wrap">
+      <div class="editor-header">
+        <div class="editor-title" id="editor-title"></div>
+        <div class="editor-header-actions">
+          <span class="editor-status" id="editor-status"></span>
+          <button class="editor-save-btn" id="editor-save-btn" type="button">Save</button>
+        </div>
+      </div>
+      <textarea id="editor-textarea" spellcheck="false"></textarea>
     </div>
   </div>
 

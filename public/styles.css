@@ -150,6 +150,26 @@ button { font: inherit; }
 .view-btn:hover { color: var(--text-dim); }
 .view-btn.active { background: var(--accent-soft); color: var(--accent); }
 
+.upload-btn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 0 14px;
+  height: 34px;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #08101d;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  flex-shrink: 0;
+  transition: filter 0.15s var(--ease), transform 0.12s var(--ease);
+}
+.upload-btn:hover { filter: brightness(1.08); }
+.upload-btn:active { transform: scale(0.96); }
+.upload-btn svg { width: 16px; height: 16px; }
+
 /* ---------- Body: sidebar + content ---------- */
 .app-body {
   flex: 1;
@@ -482,6 +502,9 @@ button { font: inherit; }
 }
 .context-menu-item:hover, .context-menu-item:focus-visible { background: var(--bg-hover); outline: none; }
 .context-menu-item svg { width: 15px; height: 15px; color: var(--text-dim); flex-shrink: 0; }
+.context-menu-item.danger { color: var(--danger); }
+.context-menu-item.danger svg { color: var(--danger); }
+.context-menu-item.danger:hover { background: rgba(255, 107, 107, 0.12); }
 .context-menu-sep { height: 1px; background: var(--border-soft); margin: 5px 4px; }
 .context-menu-title {
   padding: 6px 10px 4px;
@@ -574,6 +597,8 @@ button { font: inherit; }
 .info-action-btn:active { transform: scale(0.97); }
 .info-action-btn.primary { background: var(--accent); border-color: var(--accent); color: #08101d; }
 .info-action-btn.primary:hover { filter: brightness(1.08); }
+.info-action-btn.danger { color: var(--danger); border-color: rgba(255, 107, 107, 0.35); }
+.info-action-btn.danger:hover { background: rgba(255, 107, 107, 0.12); border-color: var(--danger); }
 .info-action-btn svg { width: 15px; height: 15px; }
 
 /* ---------- Modals ---------- */
@@ -662,7 +687,22 @@ button { font: inherit; }
   flex-direction: column;
   gap: 10px;
 }
+.doc-header { display: flex; align-items: center; justify-content: center; gap: 10px; position: relative; }
 .doc-title { color: var(--text-dim); font-size: 0.88rem; text-align: center; }
+.doc-edit-btn {
+  position: absolute;
+  right: 0;
+  padding: 5px 12px;
+  background: var(--bg-elevated-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 0.8rem;
+  font-weight: 550;
+  cursor: pointer;
+  transition: background 0.14s ease, border-color 0.14s ease;
+}
+.doc-edit-btn:hover { background: var(--bg-hover); border-color: #3a4049; }
 .doc-frame, .doc-text {
   flex: 1;
   width: 100%;
@@ -682,6 +722,51 @@ button { font: inherit; }
   font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
   font-size: 0.85rem;
 }
+
+/* ---------- Text/code editor ---------- */
+.editor-wrap {
+  width: min(1000px, 94vw);
+  height: 86vh;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transform: scale(0.96) translateY(8px);
+  transition: transform 0.24s var(--ease);
+}
+.modal-overlay.open .editor-wrap { transform: scale(1) translateY(0); }
+.editor-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.editor-title { color: var(--text-dim); font-size: 0.88rem; word-break: break-word; }
+.editor-header-actions { display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
+.editor-status { color: var(--text-faint); font-size: 0.8rem; }
+.editor-save-btn {
+  padding: 7px 16px;
+  background: var(--accent);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #08101d;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: filter 0.15s var(--ease);
+}
+.editor-save-btn:hover { filter: brightness(1.08); }
+.editor-save-btn:disabled { opacity: 0.5; cursor: default; filter: none; }
+#editor-textarea { display: none; }
+.editor-wrap .CodeMirror {
+  flex: 1;
+  height: auto;
+  background: var(--bg-elevated);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  box-shadow: var(--shadow-lg);
+  font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+  font-size: 0.85rem;
+}
+.editor-wrap .CodeMirror-gutters { background: var(--bg-elevated-2); border-right: 1px solid var(--border-soft); }
+.editor-wrap .CodeMirror-linenumber { color: var(--text-faint); }
+.editor-wrap .CodeMirror-cursor { border-left: 1px solid var(--text); }
+.editor-wrap .CodeMirror-selected { background: var(--accent-soft); }
 
 /* ---------- Audio bar ---------- */
 .audio-bar {

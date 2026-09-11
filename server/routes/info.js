@@ -4,7 +4,7 @@ const path = require('path');
 const { categoryFor } = require('../fileTypes');
 const { safeResolve } = require('./list');
 
-function buildInfoRouter(rootDir, rootTitle) {
+function buildInfoRouter(rootDir, rootTitle, isWritable = () => false) {
   const router = express.Router();
 
   router.get(/^\/(.*)$/, (req, res) => {
@@ -33,7 +33,8 @@ function buildInfoRouter(rootDir, rootTitle) {
           size: isDir ? null : stat.size,
           itemCount: isDir ? itemCount : null,
           created: stat.birthtime.toISOString(),
-          modified: stat.mtime.toISOString()
+          modified: stat.mtime.toISOString(),
+          writable: isWritable(cleanRelPath)
         });
       };
 

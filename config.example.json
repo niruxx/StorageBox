@@ -2,5 +2,14 @@
   "title": "StorageBox",
   "root": "./shared",
   "host": "0.0.0.0",
-  "port": 3000
+  "port": 3000,
+  "allowAnonymousUpload": false,
+  "allowWriteAccess": {
+    "enabled": false,
+    "webdav": false,
+    "defaultMode": "read-only",
+    "rules": [
+      { "path": "incoming", "mode": "read-write" }
+    ]
+  }
 }

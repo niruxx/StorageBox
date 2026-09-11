@@ -27,7 +27,12 @@
     download:
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 3v12M7 10l5 5 5-5M4 19h16" stroke-linecap="round" stroke-linejoin="round"/></svg>',
     link: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 15l6-6M10 6l1-1a4 4 0 0 1 6 6l-1 1M14 18l-1 1a4 4 0 0 1-6-6l1-1" stroke-linecap="round" stroke-linejoin="round"/></svg>',
-    info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01" stroke-linecap="round"/></svg>'
+    info: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 11v6M12 7.5v.01" stroke-linecap="round"/></svg>',
+    edit: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M8 4L2 12l6 8M16 4l6 8-6 8" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    rename:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    trash:
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M9 7V4h6v3M6 7l1 13a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-13" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 11v6M14 11v6" stroke-linecap="round"/></svg>'
   };
 
   const KEBAB_ICON =
@@ -56,6 +61,8 @@
     sidebarBackdrop: el('sidebar-backdrop'),
     tree: el('tree'),
     viewToggle: el('view-toggle'),
+    uploadBtn: el('upload-btn'),
+    uploadInput: el('upload-input'),
 
     contextMenu: el('context-menu'),
 
@@ -82,6 +89,13 @@
     docFrame: el('doc-frame'),
     docText: el('doc-text'),
     docClose: el('doc-close'),
+    docEditBtn: el('doc-edit-btn'),
+    editorModal: el('editor-modal'),
+    editorClose: el('editor-close'),
+    editorTitle: el('editor-title'),
+    editorStatus: el('editor-status'),
+    editorSaveBtn: el('editor-save-btn'),
+    editorTextarea: el('editor-textarea'),
     audioBar: el('audio-bar'),
     audioEl: el('audio-element'),
     audioTrackName: el('audio-track-name'),
@@ -619,9 +633,9 @@
   });
 
   // ---------- Context menu ----------
-  function menuItem(label, icon, onClick) {
+  function menuItem(label, icon, onClick, danger) {
     const btn = document.createElement('button');
-    btn.className = 'context-menu-item';
+    btn.className = 'context-menu-item' + (danger ? ' danger' : '');
     btn.type = 'button';
     btn.setAttribute('role', 'menuitem');
     btn.innerHTML = `${icon}<span>${label}</span>`;
@@ -678,6 +692,15 @@
 
     menu.appendChild(menuSep());
     menu.appendChild(menuItem('Info', MENU_ICONS.info, () => openInfoPanel(entry)));
+
+    if (entry.writable) {
+      menu.appendChild(menuSep());
+      if (entry.type === 'file' && entry.category === 'text') {
+        menu.appendChild(menuItem('Edit', MENU_ICONS.edit, () => openEditor(entry)));
+      }
+      menu.appendChild(menuItem('Rename', MENU_ICONS.rename, () => renameEntry(entry)));
+      menu.appendChild(menuItem('Delete', MENU_ICONS.trash, () => deleteEntry(entry), true));
+    }
 
     menu.style.left = '0px';
     menu.style.top = '0px';
@@ -773,9 +796,9 @@
     els.infoRows.appendChild(infoRow('Created', formatDate(data.created)));
   }
 
-  function actionButton(label, icon, onClick, primary) {
+  function actionButton(label, icon, onClick, primary, danger) {
     const btn = document.createElement('button');
-    btn.className = 'info-action-btn' + (primary ? ' primary' : '');
+    btn.className = 'info-action-btn' + (primary ? ' primary' : '') + (danger ? ' danger' : '');
     btn.type = 'button';
     btn.innerHTML = `${icon}<span>${label}</span>`;
     btn.addEventListener('click', onClick);
@@ -817,6 +840,29 @@
         showToast(ok ? 'Link copied to clipboard' : 'Could not copy link');
       })
     );
+
+    if (data.writable) {
+      if (entry.type === 'file' && entry.category === 'text') {
+        els.infoActions.appendChild(
+          actionButton('Edit', MENU_ICONS.edit, () => {
+            closeInfoPanel();
+            openEditor(entry);
+          })
+        );
+      }
+      els.infoActions.appendChild(
+        actionButton('Rename', MENU_ICONS.rename, () => {
+          closeInfoPanel();
+          renameEntry(entry);
+        })
+      );
+      els.infoActions.appendChild(
+        actionButton('Delete', MENU_ICONS.trash, () => {
+          closeInfoPanel();
+          deleteEntry(entry);
+        }, false, true)
+      );
+    }
   }
 
   function closeInfoPanel() {
@@ -889,6 +935,7 @@
     els.docFrame.src = fileUrl(entry.path);
     els.docFrame.hidden = false;
     els.docText.hidden = true;
+    els.docEditBtn.hidden = true;
     openEl(els.docModal);
   }
 
@@ -896,6 +943,11 @@
     els.docTitle.textContent = entry.name;
     els.docFrame.hidden = true;
     els.docText.hidden = false;
+    els.docEditBtn.hidden = !entry.writable;
+    els.docEditBtn.onclick = () => {
+      closeDoc();
+      openEditor(entry);
+    };
     openEl(els.docModal);
 
     const MAX_PREVIEW_BYTES = 2 * 1024 * 1024;
@@ -925,6 +977,197 @@
   els.docClose.addEventListener('click', closeDoc);
   els.docModal.addEventListener('click', (e) => {
     if (e.target === els.docModal) closeDoc();
+  });
+
+  // ---------- Write access: edit / rename / delete ----------
+  // Only ever reachable when the server has annotated an entry as
+  // entry.writable (which itself only happens when allowWriteAccess is
+  // enabled for that path in config.json) — see server/access.js. The
+  // server re-checks writability on every request regardless of what the
+  // UI shows, so these are pure conveniences, not the actual guard.
+  const CM_MODE_BY_EXT = {
+    md: { src: 'mode/markdown/markdown.js', spec: 'markdown' },
+    markdown: { src: 'mode/markdown/markdown.js', spec: 'markdown' },
+    json: { src: 'mode/javascript/javascript.js', spec: { name: 'javascript', json: true } },
+    js: { src: 'mode/javascript/javascript.js', spec: 'javascript' },
+    mjs: { src: 'mode/javascript/javascript.js', spec: 'javascript' },
+    cjs: { src: 'mode/javascript/javascript.js', spec: 'javascript' },
+    ts: { src: 'mode/javascript/javascript.js', spec: { name: 'javascript', typescript: true } },
+    css: { src: 'mode/css/css.js', spec: 'css' },
+    scss: { src: 'mode/css/css.js', spec: 'css' },
+    html: { src: 'mode/xml/xml.js', spec: { name: 'xml', htmlMode: true } },
+    htm: { src: 'mode/xml/xml.js', spec: { name: 'xml', htmlMode: true } },
+    xml: { src: 'mode/xml/xml.js', spec: 'xml' },
+    py: { src: 'mode/python/python.js', spec: 'python' },
+    sh: { src: 'mode/shell/shell.js', spec: 'shell' },
+    bash: { src: 'mode/shell/shell.js', spec: 'shell' },
+    sql: { src: 'mode/sql/sql.js', spec: 'sql' },
+    yml: { src: 'mode/yaml/yaml.js', spec: 'yaml' },
+    yaml: { src: 'mode/yaml/yaml.js', spec: 'yaml' },
+    ini: { src: 'mode/properties/properties.js', spec: 'properties' },
+    conf: { src: 'mode/properties/properties.js', spec: 'properties' },
+    properties: { src: 'mode/properties/properties.js', spec: 'properties' },
+    toml: { src: 'mode/toml/toml.js', spec: 'toml' }
+  };
+
+  function cmModeForEntry(entry) {
+    const ext = entry.name.includes('.') ? entry.name.split('.').pop().toLowerCase() : '';
+    return CM_MODE_BY_EXT[ext] || null;
+  }
+
+  function loadScriptOnce(src) {
+    if (document.querySelector(`script[data-src="${src}"]`)) return Promise.resolve();
+    return new Promise((resolve, reject) => {
+      const script = document.createElement('script');
+      script.src = src;
+      script.dataset.src = src;
+      script.addEventListener('load', () => resolve());
+      script.addEventListener('error', () => reject(new Error('Could not load editor assets.')));
+      document.head.appendChild(script);
+    });
+  }
+
+  let cmLoadPromise = null;
+  function ensureCodeMirror() {
+    if (window.CodeMirror) return Promise.resolve();
+    if (!cmLoadPromise) {
+      const link = document.createElement('link');
+      link.rel = 'stylesheet';
+      link.href = '/vendor/codemirror/lib/codemirror.css';
+      document.head.appendChild(link);
+      cmLoadPromise = loadScriptOnce('/vendor/codemirror/lib/codemirror.js');
+    }
+    return cmLoadPromise;
+  }
+
+  let cmInstance = null;
+  let editorEntry = null;
+
+  async function openEditor(entry) {
+    editorEntry = entry;
+    els.editorTitle.textContent = entry.name;
+    els.editorStatus.textContent = 'Loading…';
+    els.editorSaveBtn.disabled = true;
+    openEl(els.editorModal);
+
+    try {
+      const modeInfo = cmModeForEntry(entry);
+      const [res] = await Promise.all([
+        fetch(fileUrl(entry.path)),
+        ensureCodeMirror().then(() => (modeInfo ? loadScriptOnce(`/vendor/codemirror/${modeInfo.src}`) : null))
+      ]);
+      if (!res.ok) throw new Error('Could not load this file.');
+      const text = await res.text();
+
+      if (cmInstance) {
+        cmInstance.toTextArea();
+        cmInstance = null;
+      }
+      els.editorTextarea.value = text;
+      cmInstance = window.CodeMirror.fromTextArea(els.editorTextarea, {
+        lineNumbers: true,
+        mode: modeInfo ? modeInfo.spec : null,
+        indentUnit: 2,
+        tabSize: 2,
+        viewportMargin: Infinity
+      });
+      els.editorStatus.textContent = '';
+      els.editorSaveBtn.disabled = false;
+      cmInstance.focus();
+    } catch (err) {
+      els.editorStatus.textContent = err.message || 'Could not load this file for editing.';
+    }
+  }
+
+  function closeEditor() {
+    if (els.editorModal.hidden) return;
+    closeEl(els.editorModal);
+    editorEntry = null;
+  }
+
+  els.editorClose.addEventListener('click', closeEditor);
+  els.editorModal.addEventListener('click', (e) => {
+    if (e.target === els.editorModal) closeEditor();
+  });
+
+  els.editorSaveBtn.addEventListener('click', async () => {
+    if (!editorEntry || !cmInstance) return;
+    const content = cmInstance.getValue();
+    els.editorSaveBtn.disabled = true;
+    els.editorStatus.textContent = 'Saving…';
+    try {
+      const res = await fetch(`/api/fs/${encodeApiPath(editorEntry.path)}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'text/plain' },
+        body: content
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Save failed.');
+      showToast('Saved');
+      closeEditor();
+      navigate(pathFromLocation(), { push: false });
+    } catch (err) {
+      els.editorStatus.textContent = err.message || 'Could not save.';
+      els.editorSaveBtn.disabled = false;
+    }
+  });
+
+  async function renameEntry(entry) {
+    const newName = window.prompt('Rename to:', entry.name);
+    if (!newName || newName === entry.name) return;
+    try {
+      const res = await fetch(`/api/fs/${encodeApiPath(entry.path)}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ newName })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Rename failed.');
+      showToast(`Renamed to "${newName}"`);
+      navigate(pathFromLocation(), { push: false });
+    } catch (err) {
+      showToast(err.message || 'Rename failed.');
+    }
+  }
+
+  async function deleteEntry(entry) {
+    const kind = entry.type === 'directory' ? 'folder and everything inside it' : 'file';
+    if (!window.confirm(`Delete "${entry.name}"? This will permanently remove this ${kind}.`)) return;
+    try {
+      const res = await fetch(`/api/fs/${encodeApiPath(entry.path)}`, { method: 'DELETE' });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Delete failed.');
+      showToast(`Deleted "${entry.name}"`);
+      navigate(pathFromLocation(), { push: false });
+    } catch (err) {
+      showToast(err.message || 'Delete failed.');
+    }
+  }
+
+  // ---------- Anonymous upload drop-box ----------
+  // Only shown when the server reports uploadEnabled (config.json's
+  // "allowAnonymousUpload"). Always uploads into the fixed /uploads folder —
+  // see server/routes/upload.js.
+  els.uploadBtn.addEventListener('click', () => els.uploadInput.click());
+
+  els.uploadInput.addEventListener('change', async () => {
+    const files = Array.from(els.uploadInput.files || []);
+    els.uploadInput.value = '';
+    if (files.length === 0) return;
+
+    const formData = new FormData();
+    files.forEach((f) => formData.append('files', f));
+    showToast(`Uploading ${files.length} file${files.length === 1 ? '' : 's'}…`);
+
+    try {
+      const res = await fetch('/api/upload', { method: 'POST', body: formData });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Upload failed.');
+      showToast(`Uploaded ${data.files.length} file${data.files.length === 1 ? '' : 's'} to /uploads`);
+      if (pathFromLocation() === 'uploads') navigate('uploads', { push: false });
+    } catch (err) {
+      showToast(err.message || 'Upload failed.');
+    }
   });
 
   // ---------- Audio player ----------
@@ -997,6 +1240,7 @@
     closeLightbox();
     closeVideo();
     closeDoc();
+    closeEditor();
   }
 
   document.addEventListener('keydown', (e) => {
@@ -1031,6 +1275,7 @@
       el('site-title').textContent = data.title;
       const rootNode = state.treeIndex.get('');
       if (rootNode) rootNode.label.textContent = data.title;
+      els.uploadBtn.hidden = !data.uploadEnabled;
     } catch {
       // Keep defaults if config fetch fails.
     }

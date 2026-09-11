@@ -3,7 +3,11 @@ const EXTENSION_CATEGORIES = {
   video: ['mp4', 'webm', 'ogv', 'mov', 'm4v', 'mkv', 'avi'],
   audio: ['mp3', 'wav', 'ogg', 'oga', 'flac', 'm4a', 'aac', 'weba'],
   pdf: ['pdf'],
-  text: ['txt', 'md', 'markdown', 'csv', 'json', 'log', 'xml', 'yml', 'yaml', 'ini', 'conf'],
+  text: [
+    'txt', 'md', 'markdown', 'csv', 'json', 'log', 'xml', 'yml', 'yaml', 'ini', 'conf', 'env', 'toml',
+    'properties', 'js', 'mjs', 'cjs', 'ts', 'css', 'scss', 'py', 'sh', 'bash', 'sql', 'html', 'htm',
+    'bat', 'ps1'
+  ],
   document: ['doc', 'docx', 'xls', 'xlsx', 'ppt', 'pptx', 'odt', 'ods', 'odp', 'rtf']
 };
 

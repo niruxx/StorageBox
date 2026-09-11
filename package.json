@@ -10,7 +10,10 @@
   },
   "license": "MIT",
   "dependencies": {
-    "express": "^4.19.2"
+    "codemirror": "^5.65.21",
+    "express": "^4.19.2",
+    "multer": "^2.3.0",
+    "webdav-server": "^2.6.3"
   },
   "engines": {
     "node": ">=18"
