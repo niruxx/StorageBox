@@ -28,16 +28,21 @@ function appendAnonymousLog(logPath, ip, filename) {
   fs.appendFile(logPath, line, () => {});
 }
 
-// Anonymous drop-box upload endpoint. Only mounted when the operator has set
-// "allowAnonymousUpload": true in config.json — see server/index.js, where
-// write HTTP methods are rejected at the server level unless this route is
-// explicitly enabled.
-function buildUploadRouter(uploadsDir, logPath) {
+// Anonymous drop-box upload endpoint. Always mounted (see server/index.js)
+// so the admin settings GUI can flip "allowAnonymousUpload" on/off without a
+// restart — but every request re-checks the live flag first, and the
+// uploads/ folder is only ever created the first time an accepted upload
+// actually happens.
+function buildUploadRouter(config) {
   const router = express.Router();
 
   const storage = multer.diskStorage({
-    destination: (req, file, cb) => cb(null, uploadsDir),
+    destination: (req, file, cb) => {
+      const uploadsDir = path.join(config.rootDir, 'uploads');
+      fs.mkdir(uploadsDir, { recursive: true }, (err) => cb(err, uploadsDir));
+    },
     filename: (req, file, cb) => {
+      const uploadsDir = path.join(config.rootDir, 'uploads');
       cb(null, uniqueDestName(uploadsDir, sanitizeFilename(file.originalname)));
     }
   });
@@ -47,18 +52,26 @@ function buildUploadRouter(uploadsDir, logPath) {
     limits: { fileSize: MAX_FILE_BYTES, files: MAX_FILES_PER_REQUEST }
   });
 
-  router.post('/', upload.array('files', MAX_FILES_PER_REQUEST), (req, res) => {
-    const files = req.files || [];
-    if (files.length === 0) {
-      return res.status(400).json({ error: 'No files were received.' });
-    }
+  router.post(
+    '/',
+    (req, res, next) => {
+      if (!config.allowAnonymousUpload) return res.status(404).json({ error: 'Not found.' });
+      next();
+    },
+    upload.array('files', MAX_FILES_PER_REQUEST),
+    (req, res) => {
+      const files = req.files || [];
+      if (files.length === 0) {
+        return res.status(400).json({ error: 'No files were received.' });
+      }
 
-    for (const file of files) {
-      appendAnonymousLog(logPath, req.ip, file.filename);
-    }
+      for (const file of files) {
+        appendAnonymousLog(config.anonymousLogPath, req.ip, file.filename);
+      }
 
-    res.json({ ok: true, files: files.map((f) => ({ name: f.filename, size: f.size })) });
-  });
+      res.json({ ok: true, files: files.map((f) => ({ name: f.filename, size: f.size })) });
+    }
+  );
 
   router.use((err, req, res, next) => {
     if (err instanceof multer.MulterError) {

@@ -1,5 +1,5 @@
 const EXTENSION_CATEGORIES = {
-  image: ['jpg', 'jpeg', 'png', 'gif', 'webp', 'bmp', 'svg', 'avif', 'ico'],
+  image: ['jpg', 'jpeg', 'jfif', 'png', 'gif', 'webp', 'bmp', 'svg', 'avif', 'ico'],
   video: ['mp4', 'webm', 'ogv', 'mov', 'm4v', 'mkv', 'avi'],
   audio: ['mp3', 'wav', 'ogg', 'oga', 'flac', 'm4a', 'aac', 'weba'],
   pdf: ['pdf'],

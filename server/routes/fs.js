@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const { safeResolve } = require('./list');
+const { canUserWrite } = require('../access');
 
 const MAX_WRITE_BYTES = 5 * 1024 * 1024; // 5MB — this endpoint is for quick text/code edits, not bulk file transfer.
 
@@ -28,9 +29,11 @@ function hasDotSegment(relPath) {
 
 // Write REST API: PUT (create/overwrite file content), DELETE (remove file or
 // folder), PATCH (rename within the same folder). Every route re-checks
-// isWritable itself — the caller (server/index.js) only decides whether this
-// router is mounted at all; per-path enforcement always happens here.
-function buildFsRouter(rootDir, isWritable) {
+// isWritable (and the caller's role) itself — the caller (server/index.js)
+// only decides whether this router is mounted at all; per-path enforcement
+// always happens here.
+function buildFsRouter(config, isWritable) {
+  const rootDir = config.rootDir;
   const router = express.Router();
 
   router.put(/^\/(.*)$/, express.text({ type: '*/*', limit: MAX_WRITE_BYTES }), (req, res) => {
@@ -42,7 +45,7 @@ function buildFsRouter(rootDir, isWritable) {
     if (hasDotSegment(cleanRelPath)) {
       return res.status(403).json({ error: 'Dotfiles are not accessible through this API.' });
     }
-    if (!isWritable(cleanRelPath)) {
+    if (!isWritable(cleanRelPath) || !canUserWrite(req, config)) {
       return res.status(403).json({ error: 'This path is read-only.' });
     }
     const target = safeResolve(rootDir, relPath);
@@ -77,7 +80,7 @@ function buildFsRouter(rootDir, isWritable) {
     if (hasDotSegment(cleanRelPath)) {
       return res.status(403).json({ error: 'Dotfiles are not accessible through this API.' });
     }
-    if (!isWritable(cleanRelPath)) {
+    if (!isWritable(cleanRelPath) || !canUserWrite(req, config)) {
       return res.status(403).json({ error: 'This path is read-only.' });
     }
     const target = safeResolve(rootDir, relPath);
@@ -112,7 +115,7 @@ function buildFsRouter(rootDir, isWritable) {
     if (!isSafeBasename(newName)) {
       return res.status(400).json({ error: 'Invalid new name.' });
     }
-    if (!isWritable(cleanRelPath)) {
+    if (!isWritable(cleanRelPath) || !canUserWrite(req, config)) {
       return res.status(403).json({ error: 'This path is read-only.' });
     }
     const source = safeResolve(rootDir, relPath);

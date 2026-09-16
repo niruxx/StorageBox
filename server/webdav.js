@@ -28,10 +28,13 @@ class PathScopedPrivilegeManager extends webdav.PrivilegeManager {
 
 // Mounted at app-root (not via app.use('/webdav', ...)) because the extension
 // itself matches the full request URL against the root path it's given.
-function buildWebdavMiddleware(rootDir, accessResolver) {
+// `isWritable` should be a stable function reference (see the accessState
+// indirection in server/index.js) so that settings changed later from the
+// admin GUI are honored without rebuilding this server instance.
+function buildWebdavMiddleware(rootDir, isWritable) {
   const server = new webdav.WebDAVServer({
     rootFileSystem: new webdav.PhysicalFileSystem(rootDir),
-    privilegeManager: new PathScopedPrivilegeManager(accessResolver.isWritable)
+    privilegeManager: new PathScopedPrivilegeManager(isWritable)
   });
   return webdav.extensions.express('/webdav', server);
 }

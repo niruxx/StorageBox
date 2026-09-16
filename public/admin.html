@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Admin settings</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="admin-shell">
+    <header class="admin-topbar">
+      <a class="brand" href="/browse/">
+        <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path d="M3 7l2-3h5l2 3h9v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7z" stroke-linejoin="round" />
+        </svg>
+        <span id="admin-site-title">StorageBox</span>
+      </a>
+      <span class="admin-heading-label">Admin settings</span>
+      <div class="topbar-spacer"></div>
+      <a class="admin-back-link" href="/browse/">&larr; Back to browser</a>
+    </header>
+
+    <main class="admin-main">
+      <div class="admin-denied" id="admin-denied" hidden>
+        <p id="admin-denied-message">You need to be signed in as an admin to view this page.</p>
+        <a href="/login">Go to sign in</a>
+      </div>
+
+      <div class="admin-content" id="admin-content" hidden>
+        <section class="admin-section">
+          <h2>General</h2>
+          <div class="admin-toast" id="settings-toast" hidden></div>
+          <form id="settings-form" class="admin-form">
+            <label class="admin-field">
+              <span>Site title</span>
+              <input id="setting-title" type="text" />
+            </label>
+
+            <label class="admin-field admin-field-checkbox">
+              <input id="setting-open-mode" type="checkbox" />
+              <span>Open Directory mode (anonymous browsing, no login required)</span>
+            </label>
+
+            <label class="admin-field admin-field-checkbox">
+              <input id="setting-anon-upload" type="checkbox" />
+              <span>Allow anonymous uploads to /uploads</span>
+            </label>
+
+            <label class="admin-field admin-field-checkbox">
+              <input id="setting-write-enabled" type="checkbox" />
+              <span>Enable read-write mode (edit, rename, delete)</span>
+            </label>
+
+            <label class="admin-field">
+              <span>Default mode for paths with no rule below</span>
+              <select id="setting-default-mode">
+                <option value="read-only">Read-only</option>
+                <option value="read-write">Read-write</option>
+              </select>
+            </label>
+
+            <label class="admin-field admin-field-checkbox">
+              <input id="setting-webdav" type="checkbox" />
+              <span>Mount WebDAV at /webdav (honors the rules below)</span>
+            </label>
+
+            <div class="admin-field">
+              <span>Per-folder rules (most specific path wins)</span>
+              <div id="rules-list" class="rules-list"></div>
+              <button type="button" class="admin-btn" id="add-rule-btn">+ Add rule</button>
+            </div>
+
+            <div class="admin-readonly-block">
+              <div><strong>Shared root:</strong> <span id="setting-root"></span></div>
+              <div><strong>Host / Port:</strong> <span id="setting-hostport"></span></div>
+              <p class="admin-hint">These are set in config.json and require a server restart to change.</p>
+            </div>
+
+            <button type="submit" class="admin-btn primary" id="settings-save-btn">Save settings</button>
+          </form>
+        </section>
+
+        <section class="admin-section">
+          <h2>Users</h2>
+          <table class="admin-table" id="users-table">
+            <thead>
+              <tr><th>Username</th><th>Role</th><th>Created</th><th></th></tr>
+            </thead>
+            <tbody id="users-body"></tbody>
+          </table>
+
+          <h3>Add a user</h3>
+          <form id="user-form" class="admin-form admin-form-inline">
+            <input id="new-username" type="text" placeholder="Username" required />
+            <input id="new-password" type="password" placeholder="Password (min. 8 characters)" required />
+            <select id="new-role">
+              <option value="viewer">Viewer (view only)</option>
+              <option value="admin">Admin</option>
+            </select>
+            <button type="submit" class="admin-btn primary">Add user</button>
+          </form>
+          <div class="admin-toast" id="users-toast" hidden></div>
+        </section>
+      </div>
+    </main>
+  </div>
+  <script src="/admin.js"></script>
+</body>
+</html>

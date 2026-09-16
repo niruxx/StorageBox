@@ -4,3 +4,5 @@ config.json
 .DS_Store
 Thumbs.db
 uploads/
+users.json
+session-secret.txt

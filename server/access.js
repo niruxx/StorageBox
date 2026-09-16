@@ -36,4 +36,16 @@ function buildAccessResolver(writeConfig) {
   return { enabled, resolveMode, isWritable };
 }
 
-module.exports = { buildAccessResolver };
+// In open-directory mode there's no login/role concept at all, so a path's
+// own read-only/read-write rule is the only thing that matters — unchanged
+// from before accounts existed. In storage-server mode, a "viewer" account
+// must never be treated as able to write regardless of what a path's rule
+// says; only "admin" can. Used both to enforce writes (server/routes/fs.js,
+// server/webdav.js) and to annotate listings so the UI doesn't offer
+// Edit/Rename/Delete to an account that would just get a 403 (server/routes/list.js, info.js).
+function canUserWrite(req, config) {
+  if (config.openDirectoryMode) return true;
+  return !!(req.session && req.session.user && req.session.user.role === 'admin');
+}
+
+module.exports = { buildAccessResolver, canUserWrite };

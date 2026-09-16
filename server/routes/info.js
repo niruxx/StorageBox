@@ -3,13 +3,16 @@ const fs = require('fs');
 const path = require('path');
 const { categoryFor } = require('../fileTypes');
 const { safeResolve } = require('./list');
+const { canUserWrite } = require('../access');
 
-function buildInfoRouter(rootDir, rootTitle, isWritable = () => false) {
+function buildInfoRouter(config, isWritable = () => false) {
+  const rootDir = config.rootDir;
   const router = express.Router();
 
   router.get(/^\/(.*)$/, (req, res) => {
     const relPath = decodeURIComponent(req.params[0] || '');
     const cleanRelPath = relPath.replace(/^\/+|\/+$/g, '');
+    const rootTitle = config.title;
     const target = safeResolve(rootDir, relPath);
 
     if (!target) {
@@ -34,7 +37,7 @@ function buildInfoRouter(rootDir, rootTitle, isWritable = () => false) {
           itemCount: isDir ? itemCount : null,
           created: stat.birthtime.toISOString(),
           modified: stat.mtime.toISOString(),
-          writable: isWritable(cleanRelPath)
+          writable: isWritable(cleanRelPath) && canUserWrite(req, config)
         });
       };
 

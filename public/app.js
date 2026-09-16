@@ -63,6 +63,14 @@
     viewToggle: el('view-toggle'),
     uploadBtn: el('upload-btn'),
     uploadInput: el('upload-input'),
+    userMenu: el('user-menu'),
+    userMenuBtn: el('user-menu-btn'),
+    userAvatar: el('user-avatar'),
+    userMenuUsername: el('user-menu-username'),
+    userMenuDropdown: el('user-menu-dropdown'),
+    userMenuRole: el('user-menu-role'),
+    userMenuAdminLink: el('user-menu-admin-link'),
+    userMenuLogout: el('user-menu-logout'),
 
     contextMenu: el('context-menu'),
 
@@ -1249,6 +1257,7 @@
       closeContextMenu();
       closeInfoPanel();
       closeMobileSidebar();
+      closeUserMenu();
       return;
     }
     if (!els.lightbox.hidden) {
@@ -1266,6 +1275,35 @@
     navigate('');
   });
 
+  // ---------- User menu (storage-server mode only) ----------
+  function closeUserMenu() {
+    els.userMenuDropdown.classList.remove('open');
+  }
+
+  els.userMenuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    els.userMenuDropdown.classList.toggle('open');
+  });
+  document.addEventListener('click', (e) => {
+    if (!els.userMenuDropdown.contains(e.target) && !els.userMenuBtn.contains(e.target)) closeUserMenu();
+  });
+
+  els.userMenuLogout.addEventListener('click', async () => {
+    try {
+      await fetch('/api/auth/logout', { method: 'POST' });
+    } finally {
+      window.location.href = '/login';
+    }
+  });
+
+  function showUserMenu(user) {
+    els.userMenu.hidden = false;
+    els.userMenuUsername.textContent = user.username;
+    els.userAvatar.textContent = user.username.slice(0, 1).toUpperCase();
+    els.userMenuRole.textContent = user.role === 'admin' ? 'Admin' : 'Viewer';
+    els.userMenuAdminLink.hidden = user.role !== 'admin';
+  }
+
   // ---------- Init ----------
   async function loadConfig() {
     try {
@@ -1281,17 +1319,46 @@
     }
   }
 
-  if (localStorage.getItem('sb_sidebar_collapsed') === '1') {
-    document.querySelector('.app-shell').classList.add('sidebar-collapsed');
+  // Returns false (and redirects to /login) when this server requires a
+  // login this browser doesn't have — openDirectoryMode:true servers always
+  // report "open" here and this is a same-tick no-op.
+  async function initAuth() {
+    try {
+      const res = await fetch('/api/auth/status');
+      const data = await res.json();
+      if (data.mode === 'setup' || data.mode === 'login') {
+        window.location.href = '/login';
+        return false;
+      }
+      if (data.mode === 'authenticated' && data.user) {
+        showUserMenu(data.user);
+      }
+      return true;
+    } catch {
+      // Don't brick the app if the auth check itself fails — worst case the
+      // subsequent data requests 401 and the user can retry.
+      return true;
+    }
   }
 
-  initTree();
-  applyView();
-  loadConfig();
-  navigate(pathFromLocation(), { push: false });
-  window.history.replaceState(
-    { path: pathFromLocation() },
-    '',
-    `${BROWSE_PREFIX}/${encodeApiPath(pathFromLocation())}`
-  );
+  async function boot() {
+    const authOk = await initAuth();
+    if (!authOk) return;
+
+    if (localStorage.getItem('sb_sidebar_collapsed') === '1') {
+      document.querySelector('.app-shell').classList.add('sidebar-collapsed');
+    }
+
+    initTree();
+    applyView();
+    loadConfig();
+    navigate(pathFromLocation(), { push: false });
+    window.history.replaceState(
+      { path: pathFromLocation() },
+      '',
+      `${BROWSE_PREFIX}/${encodeApiPath(pathFromLocation())}`
+    );
+  }
+
+  boot();
 })();

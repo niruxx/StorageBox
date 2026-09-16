@@ -2,6 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const { categoryFor } = require('../fileTypes');
+const { canUserWrite } = require('../access');
 
 /**
  * Resolves a URL-supplied relative path against rootDir, refusing to leave it.
@@ -17,12 +18,14 @@ function safeResolve(rootDir, relPath) {
   return absolute;
 }
 
-function buildListRouter(rootDir, isWritable = () => false) {
+function buildListRouter(config, isWritable = () => false) {
+  const rootDir = config.rootDir;
   const router = express.Router();
 
   router.get(/^\/(.*)$/, (req, res) => {
     const relPath = decodeURIComponent(req.params[0] || '');
     const targetDir = safeResolve(rootDir, relPath);
+    const canWrite = canUserWrite(req, config);
 
     if (!targetDir) {
       return res.status(400).json({ error: 'Invalid path.' });
@@ -65,7 +68,7 @@ function buildListRouter(rootDir, isWritable = () => false) {
               size,
               modified,
               path: entryRelPath,
-              writable: isWritable(entryRelPath)
+              writable: isWritable(entryRelPath) && canWrite
             };
           })
           .filter(Boolean)
@@ -85,7 +88,7 @@ function buildListRouter(rootDir, isWritable = () => false) {
           path: cleanRelPath,
           breadcrumbs,
           entries,
-          writable: isWritable(cleanRelPath)
+          writable: isWritable(cleanRelPath) && canWrite
         });
       });
     });

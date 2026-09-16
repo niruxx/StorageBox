@@ -2,7 +2,7 @@
 
 A self-hosted directory browser — like a friendlier `fileserver` or Caddy's `file_server browse`. Point it at a folder via `config.json` and get a modern, animated web UI for browsing it: a two-pane explorer with a directory tree, grid/list views, right-click actions, and full inline preview/playback for images, video, audio, and documents.
 
-**Read-only by default.** Out of the box there is no upload, rename, delete, or write functionality of any kind — it only reads and serves whatever is already in the configured directory. Two opt-in config flags turn on more: an anonymous upload drop-box, and a full read-write mode with per-folder permissions, in-browser editing, and WebDAV. Both are off unless you explicitly enable them — see [Uploads, write access & WebDAV](#uploads-write-access--webdav).
+**Read-only by default.** Out of the box there is no upload, rename, delete, or write functionality of any kind, and no login — it only reads and serves whatever is already in the configured directory (**Open Directory mode**). Opt-in config flags turn on more: an anonymous upload drop-box, a full read-write mode with per-folder permissions, in-browser editing, and WebDAV (see [Uploads, write access & WebDAV](#uploads-write-access--webdav)) — and, if you want real accounts instead of an anonymous public folder, a **storage-server mode** with login, a first-run admin setup wizard, viewer accounts, and a settings GUI (see [Accounts & storage-server mode](#accounts--storage-server-mode)). Everything beyond basic browsing is off unless you explicitly enable it.
 
 ![StorageBox walkthrough](docs/media/demo.gif)
 
@@ -19,6 +19,7 @@ A self-hosted directory browser — like a friendlier `fileserver` or Caddy's `f
 - Fully responsive, with an off-canvas directory drawer on mobile
 - *(optional)* **Anonymous upload drop-box** — a public "Upload" button that drops files into `/uploads`, with every upload logged (filename + uploader IP)
 - *(optional)* **Read-write mode** — per-folder read-only/read-write rules, an in-browser text/code editor, rename, delete, and a WebDAV mount for using it as a real network drive
+- *(optional)* **Storage-server mode** — turns off anonymous access entirely: a first-run wizard forces creating an admin account, the admin can add read-only "viewer" accounts for other people to log in and browse with, and a built-in settings GUI (`/admin`) lets the admin change every setting above without touching `config.json` by hand
 
 ## Screenshots
 
@@ -154,6 +155,28 @@ What unlocks in a writable folder:
 
 WebDAV is opt-in on top of `enabled` because it exposes the whole mounted folder (including dotfiles, which the browser UI hides) to any WebDAV client — enable it only if you actually want disk-style mounting.
 
+## Accounts & storage-server mode
+
+By default there's no login at all — `openDirectoryMode` is `true`, and anyone who can reach the server can browse it (and use uploads/write access, if those are also on). Setting it to `false` turns this into a real multi-user storage server instead: every route requires a session, and the very first visit forces a one-time setup wizard.
+
+```json
+{
+  "openDirectoryMode": false
+}
+```
+
+What happens with this off:
+1. **First visit** — since no account exists yet, `/login` shows a "Create the admin account" form instead of a sign-in form. Whoever fills it in becomes the first `admin`.
+2. **Every route after that** — `/api/list`, `/files`, `/download`, `/api/fs`, `/webdav`, everything — requires a logged-in session, and an unauthenticated visit is redirected to `/login`.
+3. **The admin** can then open the user menu (top-right, once logged in) → **Admin settings**, or go straight to `/admin`, to:
+   - Create additional accounts — `admin` (full access, same as the account that did setup) or **`viewer`** (browse and preview only; a viewer can never write, rename, delete, or use the editor, even in a folder `allowWriteAccess` marks read-write — that permission is admin-only in storage-server mode).
+   - Edit `title`, `openDirectoryMode`, `allowAnonymousUpload`, and every `allowWriteAccess` field (including the per-folder rules list) from a form — changes save to `config.json` and take effect immediately, no restart needed. (`root`, `host`, and `port` are shown for reference but stay file-only, since they're only read once at process start.)
+   - Reset a user's password or delete their account (an admin can't delete the one they're currently logged in as, and the last remaining admin account can't be deleted at all).
+
+Passwords are hashed with bcrypt; sessions are cookie-based (`express-session`) with a random secret generated once into `session-secret.txt` next to `config.json`. Accounts live in `users.json`, also next to `config.json` — both files are gitignored, just like `config.json` itself. Login attempts are throttled (10 tries per 15 minutes per IP+username) to blunt brute-forcing.
+
+Turning `openDirectoryMode` back to `true` from the admin panel removes the login requirement immediately — it warns you before saving, since it makes the server (and anything `allowAnonymousUpload`/`allowWriteAccess` currently permit) reachable by anyone again.
+
 ## Run
 
 ```bash
@@ -173,12 +196,16 @@ Then open `http://localhost:3000` (or whatever `host`/`port` you set).
   - `/api/upload` *(only mounted when `allowAnonymousUpload` is on)* — accepts multipart uploads into `uploads/` and logs them.
   - `/api/fs/*` *(only mounted when `allowWriteAccess.enabled` is on)* — `PUT` writes/creates a file, `DELETE` removes a file or folder, `PATCH` renames within its own folder; every call re-checks `server/access.js` before touching disk.
   - `/webdav` *(only mounted when `allowWriteAccess.webdav` is on)* — a [`webdav-server`](https://www.npmjs.com/package/webdav-server)-backed mount over the same root, gated by a privilege manager that consults the same per-path rules.
-  - A single engine-level middleware rejects every write HTTP method (`POST`/`PUT`/`DELETE`/`PATCH`) by default, before any router runs — see the comment block at the top of `server/index.js`.
-- `public/` — a vanilla JS single-page app: a lazy-loaded directory tree in the sidebar, a grid/list file view, a right-click context menu, a sliding info panel, the lightbox/video/audio/doc preview UIs, and (when writable) an Edit/Rename/Delete flow with a lazily-loaded CodeMirror editor — all wired to the API above, with browser back/forward handled via `history.pushState`.
+  - `/api/auth/*` (status/setup/login/logout) and `/api/admin/*` (settings + user management, admin-only) back storage-server mode — see `server/routes/auth.js`, `server/routes/admin.js`, `server/users.js`.
+  - A single engine-level middleware rejects every write HTTP method (`POST`/`PUT`/`DELETE`/`PATCH`) by default, before any router runs; a separate `requireAuth` gate sits in front of every data route and is a no-op whenever `openDirectoryMode` is `true` — see the comment blocks at the top of `server/index.js`.
+  - Settings changed from `/admin` are written straight to `config.json` and applied to the running server via one mutable, in-place-updated `config` object (and a rebuildable `accessResolver` for write-access rules) — nothing here needs a restart except `root`/`host`/`port`.
+- `public/` — a vanilla JS single-page app: a lazy-loaded directory tree in the sidebar, a grid/list file view, a right-click context menu, a sliding info panel, the lightbox/video/audio/doc preview UIs, an Edit/Rename/Delete flow with a lazily-loaded CodeMirror editor, and (in storage-server mode) a login page, a user menu, and an admin settings page — all wired to the API above, with browser back/forward handled via `history.pushState`.
 
 ## Security notes
 
 - All listing and file routes resolve paths against the configured root and reject any request that would escape it (`../` traversal, absolute paths, symlink tricks via normal path resolution).
 - Dotfiles (`.env`, `.git`, etc.) are excluded from directory listings, file serving, and the write API — though a WebDAV mount, if enabled, does expose them (see above).
-- **Read-only by default.** Write HTTP methods are refused at the server level unless `allowAnonymousUpload` or `allowWriteAccess` is explicitly turned on in `config.json`, and even then every write is re-checked against per-path rules server-side — the UI hiding a button is a convenience, not the actual guard.
-- If you enable uploads or write access on a server reachable by untrusted users, treat it like any other write-capable fileserver: put it behind a reverse proxy (Caddy, nginx) with authentication, restrict it to a trusted network, and keep an eye on `log_anonymous.log`.
+- **Read-only, and login-free, by default.** Write HTTP methods are refused at the server level unless `allowAnonymousUpload` or `allowWriteAccess` is explicitly turned on, and every data route requires a session once `openDirectoryMode` is turned off — in every case the actual guard runs server-side on every request; the UI hiding a button or redirecting to `/login` is just a convenience.
+- A **viewer** account can never write, rename, delete, or edit — regardless of what `allowWriteAccess` rules say — only an **admin** account can. This is enforced in the same server-side checks as everything else (`server/access.js`'s `canUserWrite`), not just hidden in the UI.
+- Session cookies are `httpOnly`; the session secret is generated once into `session-secret.txt` and reused across restarts. There's no HTTPS built in — if you expose storage-server mode beyond a trusted LAN, put it behind a reverse proxy (Caddy, nginx) that terminates TLS, so login credentials and session cookies aren't sent in the clear.
+- If you enable uploads or write access on a server reachable by untrusted users, treat it like any other write-capable fileserver: restrict it to a trusted network or put it in storage-server mode with accounts, and keep an eye on `log_anonymous.log`.

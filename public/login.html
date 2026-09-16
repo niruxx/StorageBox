@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Sign in</title>
+  <link rel="stylesheet" href="/styles.css" />
+</head>
+<body>
+  <div class="auth-shell">
+    <div class="auth-card">
+      <div class="auth-brand">
+        <svg class="brand-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path d="M3 7l2-3h5l2 3h9v11a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1V7z" stroke-linejoin="round" />
+        </svg>
+        <span id="auth-brand-title">StorageBox</span>
+      </div>
+      <h1 class="auth-heading" id="auth-heading">Sign in</h1>
+      <p class="auth-sub" id="auth-sub">Checking server status&hellip;</p>
+      <form id="auth-form" class="auth-form" hidden>
+        <label class="auth-label">
+          Username
+          <input id="auth-username" name="username" autocomplete="username" required />
+        </label>
+        <label class="auth-label">
+          Password
+          <input id="auth-password" name="password" type="password" autocomplete="current-password" required />
+        </label>
+        <label class="auth-label" id="auth-confirm-wrap" hidden>
+          Confirm password
+          <input id="auth-confirm" type="password" autocomplete="new-password" />
+        </label>
+        <div class="auth-error" id="auth-error" hidden></div>
+        <button type="submit" class="auth-submit" id="auth-submit">Sign in</button>
+      </form>
+    </div>
+  </div>
+  <script src="/login.js"></script>
+</body>
+</html>
