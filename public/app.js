@@ -1320,7 +1320,7 @@
   }
 
   // Returns false (and redirects to /login) when this server requires a
-  // login this browser doesn't have — openDirectoryMode:true servers always
+  // login this browser doesn't have — servers with adminEnabled:false always
   // report "open" here and this is a same-tick no-op.
   async function initAuth() {
     try {

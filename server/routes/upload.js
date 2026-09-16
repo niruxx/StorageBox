@@ -2,6 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const express = require('express');
 const multer = require('multer');
+const { uploadsEnabled } = require('../access');
 
 const MAX_FILE_BYTES = 500 * 1024 * 1024; // 500MB per file
 const MAX_FILES_PER_REQUEST = 20;
@@ -55,7 +56,7 @@ function buildUploadRouter(config) {
   router.post(
     '/',
     (req, res, next) => {
-      if (!config.allowAnonymousUpload) return res.status(404).json({ error: 'Not found.' });
+      if (!uploadsEnabled(config)) return res.status(404).json({ error: 'Not found.' });
       next();
     },
     upload.array('files', MAX_FILES_PER_REQUEST),

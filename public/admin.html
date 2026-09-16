@@ -37,8 +37,8 @@
             </label>
 
             <label class="admin-field admin-field-checkbox">
-              <input id="setting-open-mode" type="checkbox" />
-              <span>Open Directory mode (anonymous browsing, no login required)</span>
+              <input id="setting-admin-enabled" type="checkbox" />
+              <span>Admin &amp; accounts enabled (requires login; turning this off makes StorageBox a plain, anonymous, read-only server)</span>
             </label>
 
             <label class="admin-field admin-field-checkbox">
@@ -84,19 +84,25 @@
           <h2>Users</h2>
           <table class="admin-table" id="users-table">
             <thead>
-              <tr><th>Username</th><th>Role</th><th>Created</th><th></th></tr>
+              <tr><th>Username</th><th>Role</th><th>Can see</th><th>Created</th><th></th></tr>
             </thead>
             <tbody id="users-body"></tbody>
           </table>
 
           <h3>Add a user</h3>
-          <form id="user-form" class="admin-form admin-form-inline">
-            <input id="new-username" type="text" placeholder="Username" required />
-            <input id="new-password" type="password" placeholder="Password (min. 8 characters)" required />
-            <select id="new-role">
-              <option value="viewer">Viewer (view only)</option>
-              <option value="admin">Admin</option>
-            </select>
+          <form id="user-form" class="admin-form">
+            <div class="admin-form-inline">
+              <input id="new-username" type="text" placeholder="Username" required />
+              <input id="new-password" type="password" placeholder="Password (min. 8 characters)" required />
+              <select id="new-role">
+                <option value="viewer">Viewer (view only)</option>
+                <option value="admin">Admin</option>
+              </select>
+            </div>
+            <label class="admin-field">
+              <span>Visible folders for this user, if a viewer (comma-separated, e.g. "Photos, Docs/2024" — blank means everything)</span>
+              <input id="new-allowed-paths" type="text" placeholder="blank = everything" />
+            </label>
             <button type="submit" class="admin-btn primary">Add user</button>
           </form>
           <div class="admin-toast" id="users-toast" hidden></div>

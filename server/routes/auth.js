@@ -34,11 +34,11 @@ function clearAttempts(key) {
 
 // Gate applied to every data-bearing route (see server/index.js). `config`
 // is the single mutable config object created at boot — reading
-// config.openDirectoryMode here always reflects the live value, including
+// config.adminEnabled here always reflects the live value, including
 // after an admin flips it from the settings GUI.
 function requireAuth(config) {
   return (req, res, next) => {
-    if (config.openDirectoryMode) return next();
+    if (!config.adminEnabled) return next();
     if (req.session && req.session.user) return next();
     if (req.path.startsWith('/api/')) {
       return res.status(401).json({ error: 'Login required.' });
@@ -56,15 +56,15 @@ function buildAuthRouter(config) {
   const router = express.Router();
 
   router.get('/status', (req, res) => {
-    if (config.openDirectoryMode) return res.json({ mode: 'open' });
+    if (!config.adminEnabled) return res.json({ mode: 'open' });
     if (!hasAdmin(config.usersPath)) return res.json({ mode: 'setup' });
     if (req.session && req.session.user) return res.json({ mode: 'authenticated', user: req.session.user });
     return res.json({ mode: 'login' });
   });
 
   router.post('/setup', express.json(), (req, res) => {
-    if (config.openDirectoryMode) {
-      return res.status(400).json({ error: 'Open directory mode is enabled; no login is required.' });
+    if (!config.adminEnabled) {
+      return res.status(400).json({ error: 'Admin & accounts are disabled; no login is required.' });
     }
     if (hasAdmin(config.usersPath)) {
       return res.status(400).json({ error: 'Setup has already been completed. Please log in instead.' });
@@ -84,8 +84,8 @@ function buildAuthRouter(config) {
   });
 
   router.post('/login', express.json(), (req, res) => {
-    if (config.openDirectoryMode) {
-      return res.status(400).json({ error: 'Open directory mode is enabled; no login is required.' });
+    if (!config.adminEnabled) {
+      return res.status(400).json({ error: 'Admin & accounts are disabled; no login is required.' });
     }
     const { username, password } = req.body || {};
     const key = attemptKey(req, username);

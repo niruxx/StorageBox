@@ -3,7 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const { categoryFor } = require('../fileTypes');
 const { safeResolve } = require('./list');
-const { canUserWrite } = require('../access');
+const { canUserWrite, canUserReach } = require('../access');
 
 function buildInfoRouter(config, isWritable = () => false) {
   const rootDir = config.rootDir;
@@ -17,6 +17,9 @@ function buildInfoRouter(config, isWritable = () => false) {
 
     if (!target) {
       return res.status(400).json({ error: 'Invalid path.' });
+    }
+    if (!canUserReach(req, config, cleanRelPath)) {
+      return res.status(404).json({ error: 'Not found.' });
     }
 
     fs.stat(target, (err, stat) => {

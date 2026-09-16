@@ -3,10 +3,25 @@ const bcrypt = require('bcryptjs');
 
 // Flat JSON user store, mirroring how config.json/log_anonymous.log already
 // work in this project — no database dependency for a single-folder
-// self-hosted app. Only relevant when openDirectoryMode is false; the file
-// is created on first admin setup, not before.
+// self-hosted app. Only relevant when adminEnabled is true; the file is
+// created on first admin setup, not before.
 const SALT_ROUNDS = 10;
 const USERNAME_RE = /^[a-zA-Z0-9_.-]{3,32}$/;
+
+// A "viewer" with an empty allowedPaths list can see everything (the
+// default — matches the old flat admin/viewer split). A non-empty list
+// restricts them to just those folders (and their subfolders) — see
+// canUserSee/canUserReach in server/access.js. Meaningless for admins, who
+// always see everything regardless of this field.
+function sanitizeAllowedPaths(raw) {
+  if (!Array.isArray(raw)) return [];
+  const seen = new Set();
+  for (const entry of raw) {
+    const norm = String(entry || '').replace(/^\/+|\/+$/g, '').trim();
+    if (norm) seen.add(norm);
+  }
+  return Array.from(seen);
+}
 
 function loadUsers(usersPath) {
   if (!fs.existsSync(usersPath)) return [];
@@ -41,10 +56,15 @@ function findUser(usersPath, username) {
 }
 
 function publicUser(user) {
-  return { username: user.username, role: user.role, createdAt: user.createdAt };
+  return {
+    username: user.username,
+    role: user.role,
+    createdAt: user.createdAt,
+    allowedPaths: Array.isArray(user.allowedPaths) ? user.allowedPaths : []
+  };
 }
 
-function createUser(usersPath, { username, password, role }) {
+function createUser(usersPath, { username, password, role, allowedPaths }) {
   if (!isValidUsername(username)) {
     throw new Error('Username must be 3-32 characters: letters, numbers, underscore, dot, or hyphen.');
   }
@@ -59,6 +79,7 @@ function createUser(usersPath, { username, password, role }) {
     username,
     passwordHash: bcrypt.hashSync(password, SALT_ROUNDS),
     role: role === 'admin' ? 'admin' : 'viewer',
+    allowedPaths: sanitizeAllowedPaths(allowedPaths),
     createdAt: new Date().toISOString()
   };
   users.push(user);
@@ -84,6 +105,14 @@ function setPassword(usersPath, username, newPassword) {
   saveUsers(usersPath, users);
 }
 
+function setAllowedPaths(usersPath, username, allowedPaths) {
+  const users = loadUsers(usersPath);
+  const user = users.find((u) => u.username.toLowerCase() === String(username).toLowerCase());
+  if (!user) throw new Error('User not found.');
+  user.allowedPaths = sanitizeAllowedPaths(allowedPaths);
+  saveUsers(usersPath, users);
+}
+
 function deleteUser(usersPath, username) {
   const users = loadUsers(usersPath);
   const target = users.find((u) => u.username.toLowerCase() === String(username).toLowerCase());
@@ -104,6 +133,7 @@ module.exports = {
   createUser,
   verifyUser,
   setPassword,
+  setAllowedPaths,
   deleteUser,
   listUsers,
   publicUser

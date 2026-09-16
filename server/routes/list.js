@@ -2,7 +2,7 @@ const express = require('express');
 const fs = require('fs');
 const path = require('path');
 const { categoryFor } = require('../fileTypes');
-const { canUserWrite } = require('../access');
+const { canUserWrite, canUserReach } = require('../access');
 
 /**
  * Resolves a URL-supplied relative path against rootDir, refusing to leave it.
@@ -24,11 +24,15 @@ function buildListRouter(config, isWritable = () => false) {
 
   router.get(/^\/(.*)$/, (req, res) => {
     const relPath = decodeURIComponent(req.params[0] || '');
+    const cleanRelPath = relPath.replace(/^\/+|\/+$/g, '');
     const targetDir = safeResolve(rootDir, relPath);
     const canWrite = canUserWrite(req, config);
 
     if (!targetDir) {
       return res.status(400).json({ error: 'Invalid path.' });
+    }
+    if (!canUserReach(req, config, cleanRelPath)) {
+      return res.status(404).json({ error: 'Directory not found.' });
     }
 
     fs.stat(targetDir, (statErr, stat) => {
@@ -49,6 +53,8 @@ function buildListRouter(config, isWritable = () => false) {
               .relative(rootDir, entryAbsPath)
               .split(path.sep)
               .join('/');
+
+            if (!canUserReach(req, config, entryRelPath)) return null;
 
             let size = null;
             let modified = null;
@@ -77,7 +83,6 @@ function buildListRouter(config, isWritable = () => false) {
             return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
           });
 
-        const cleanRelPath = relPath.replace(/^\/+|\/+$/g, '');
         const segments = cleanRelPath ? cleanRelPath.split('/') : [];
         const breadcrumbs = segments.map((seg, i) => ({
           name: seg,

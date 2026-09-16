@@ -1,7 +1,7 @@
 const express = require('express');
 const { saveConfigPatch } = require('../config');
-const { buildAccessResolver } = require('../access');
-const { listUsers, createUser, deleteUser, setPassword } = require('../users');
+const { buildAccessResolver, writeAccessEnabled } = require('../access');
+const { listUsers, createUser, deleteUser, setPassword, setAllowedPaths } = require('../users');
 
 // All routes here are mounted behind requireAdmin (see server/index.js) —
 // only a logged-in admin session can reach this router.
@@ -11,7 +11,7 @@ function buildAdminRouter(config, accessState) {
   router.get('/settings', (req, res) => {
     res.json({
       title: config.title,
-      openDirectoryMode: config.openDirectoryMode,
+      adminEnabled: config.adminEnabled,
       allowAnonymousUpload: config.allowAnonymousUpload,
       allowWriteAccess: config.allowWriteAccess,
       // Shown for reference only — changing these requires editing
@@ -32,8 +32,14 @@ function buildAdminRouter(config, accessState) {
     Object.assign(config, saved);
     // Rebuild the shared resolver in place so every already-constructed
     // router (list/info/fs/webdav) picks up the new rules on their next
-    // request — see the accessState indirection in server/index.js.
-    accessState.resolver = buildAccessResolver(config.allowWriteAccess);
+    // request — see the accessState indirection in server/index.js. Built
+    // from the *effective* enabled flag so turning adminEnabled off also
+    // forces every path read-only immediately, even if allowWriteAccess
+    // itself is still "on" underneath.
+    accessState.resolver = buildAccessResolver({
+      ...config.allowWriteAccess,
+      enabled: writeAccessEnabled(config)
+    });
     res.json({ ok: true, settings: saved });
   });
 
@@ -43,8 +49,8 @@ function buildAdminRouter(config, accessState) {
 
   router.post('/users', express.json(), (req, res) => {
     try {
-      const { username, password, role } = req.body || {};
-      const user = createUser(config.usersPath, { username, password, role });
+      const { username, password, role, allowedPaths } = req.body || {};
+      const user = createUser(config.usersPath, { username, password, role, allowedPaths });
       res.json({ ok: true, user });
     } catch (err) {
       res.status(400).json({ error: err.message });
@@ -55,6 +61,9 @@ function buildAdminRouter(config, accessState) {
     try {
       if (req.body && typeof req.body.password === 'string' && req.body.password) {
         setPassword(config.usersPath, req.params.username, req.body.password);
+      }
+      if (req.body && Array.isArray(req.body.allowedPaths)) {
+        setAllowedPaths(config.usersPath, req.params.username, req.body.allowedPaths);
       }
       res.json({ ok: true });
     } catch (err) {

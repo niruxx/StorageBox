@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const express = require('express');
 const session = require('express-session');
 const { loadConfig } = require('./config');
-const { buildAccessResolver, canUserWrite } = require('./access');
+const { buildAccessResolver, uploadsEnabled, writeAccessEnabled, webdavEnabled, canUserSee } = require('./access');
 const { buildListRouter } = require('./routes/list');
 const { buildInfoRouter } = require('./routes/info');
 const { buildDownloadRouter } = require('./routes/download');
@@ -21,11 +21,16 @@ const { buildAdminRouter } = require('./routes/admin');
 // the exception: they're only read once, here, at process start.
 const config = loadConfig();
 
-// `accessState.resolver` is rebuilt whenever allowWriteAccess changes; the
-// `isWritable` function below is a stable reference that always reads
-// through the current resolver, so every router built with it (list, info,
-// fs, webdav) picks up new rules live without needing to be reconstructed.
-const accessState = { resolver: buildAccessResolver(config.allowWriteAccess) };
+// `accessState.resolver` is rebuilt whenever allowWriteAccess (or
+// adminEnabled) changes; the `isWritable` function below is a stable
+// reference that always reads through the current resolver, so every
+// router built with it (list, info, fs, webdav) picks up new rules live
+// without needing to be reconstructed. Built from the *effective* enabled
+// flag so "adminEnabled: false" forces read-only everywhere no matter what
+// allowWriteAccess itself says.
+const accessState = {
+  resolver: buildAccessResolver({ ...config.allowWriteAccess, enabled: writeAccessEnabled(config) })
+};
 const isWritable = (relPath) => accessState.resolver.isWritable(relPath);
 
 const app = express();
@@ -44,8 +49,8 @@ function loadOrCreateSessionSecret(secretPath) {
 }
 
 // Sessions back the optional login system (server/routes/auth.js). This is
-// mounted unconditionally so "openDirectoryMode" can be toggled on/off later
-// from the admin GUI without restarting the process — when it's true (the
+// mounted unconditionally so "adminEnabled" can be toggled on/off later from
+// the admin GUI without restarting the process — when it's false (the
 // default), nothing here ever gets exercised: no login route works, so no
 // session is ever created for a visitor.
 app.use(
@@ -64,10 +69,13 @@ app.use(
 // Read-only by default at the server engine level: every write method is
 // rejected here, before any router sees the request. Only two things can
 // let a write method through:
-//   1. POST /api/upload, and only when "allowAnonymousUpload" is enabled.
-//   2. PUT/DELETE/PATCH under /api/fs/, and only when "allowWriteAccess" is
-//      enabled — the fs router then re-checks per-path read-only/read-write
+//   1. POST /api/upload, and only when uploadsEnabled(config) is true.
+//   2. PUT/DELETE/PATCH under /api/fs/, and only when writeAccessEnabled(config)
+//      is true — the fs router then re-checks per-path read-only/read-write
 //      rules itself (server/access.js) before touching the filesystem.
+// Both of those already fold in "adminEnabled" (server/access.js), so with
+// adminEnabled off — the default — this gate blocks every write, full stop,
+// regardless of what allowAnonymousUpload/allowWriteAccess say in config.json.
 // /webdav is exempt from this gate because it owns a wider set of HTTP verbs
 // (MKCOL, MOVE, LOCK, ...) and enforces the same per-path rules through its
 // own privilege manager (server/webdav.js).
@@ -75,8 +83,8 @@ const WRITE_METHODS = new Set(['POST', 'PUT', 'DELETE', 'PATCH']);
 app.use((req, res, next) => {
   if (req.path.startsWith(WEBDAV_PREFIX)) return next();
   if (!WRITE_METHODS.has(req.method)) return next();
-  if (config.allowAnonymousUpload && req.path === UPLOAD_ROUTE) return next();
-  if (config.allowWriteAccess.enabled && req.path.startsWith(FS_ROUTE_PREFIX)) return next();
+  if (uploadsEnabled(config) && req.path === UPLOAD_ROUTE) return next();
+  if (writeAccessEnabled(config) && req.path.startsWith(FS_ROUTE_PREFIX)) return next();
   // The admin API legitimately uses PUT/POST/PATCH/DELETE too — let those
   // through here; requireAdmin (applied below where it's mounted) is what
   // actually protects them.
@@ -90,9 +98,9 @@ app.use((req, res, next) => {
 app.get('/api/config', (req, res) => {
   res.json({
     title: config.title,
-    uploadEnabled: config.allowAnonymousUpload,
-    writeAccessEnabled: config.allowWriteAccess.enabled,
-    openDirectoryMode: config.openDirectoryMode
+    uploadEnabled: uploadsEnabled(config),
+    writeAccessEnabled: writeAccessEnabled(config),
+    adminEnabled: config.adminEnabled
   });
 });
 
@@ -102,7 +110,7 @@ app.use('/api/auth', buildAuthRouter(config));
 
 // Everything below this point serves directory contents or lets an admin
 // change server state, so it all sits behind requireAuth: a no-op whenever
-// openDirectoryMode is true, otherwise it demands a logged-in session.
+// adminEnabled is false, otherwise it demands a logged-in session.
 const authGate = requireAuth(config);
 
 app.use('/api/list', authGate, buildListRouter(config, isWritable));
@@ -117,23 +125,19 @@ app.use('/api/admin', requireAdmin, buildAdminRouter(config, accessState));
 app.use('/vendor/codemirror', express.static(path.join(__dirname, '..', 'node_modules', 'codemirror')));
 
 // WebDAV is built once at boot (it owns its own long-lived server instance)
-// but gated live on every request: both the auth check and the
-// allowWriteAccess.enabled/webdav flags can change later from the admin GUI.
+// but gated live on every request via webdavEnabled(config), which can
+// change later from the admin GUI. It's also admin-only: per-user
+// visibility scoping (server/access.js canUserSee/canUserReach) isn't
+// applied to it — filtering that deep inside PROPFIND responses isn't worth
+// the complexity — so rather than let a restricted viewer browse the whole
+// tree over DAV, it's simply unavailable to non-admin accounts.
 const webdavHandler = buildWebdavMiddleware(config.rootDir, isWritable);
-const WEBDAV_WRITE_METHODS = new Set(['PUT', 'DELETE', 'MKCOL', 'MOVE', 'COPY', 'PROPPATCH']);
 app.use((req, res, next) => {
   if (!req.path.startsWith(WEBDAV_PREFIX)) return next();
-  if (!(config.allowWriteAccess.enabled && config.allowWriteAccess.webdav)) {
-    return res.status(404).end();
-  }
+  if (!webdavEnabled(config)) return res.status(404).end();
   authGate(req, res, (err) => {
     if (err) return next(err);
-    // The privilege manager (server/webdav.js) already enforces per-path
-    // read-only/read-write rules, but it has no visibility into which
-    // Express session made the request. Block mutating DAV verbs here for
-    // any non-admin session instead — same "viewer can never write" rule
-    // as the REST write API (server/access.js canUserWrite).
-    if (WEBDAV_WRITE_METHODS.has(req.method) && !canUserWrite(req, config)) {
+    if (!(req.session && req.session.user && req.session.user.role === 'admin')) {
       return res.status(403).end();
     }
     webdavHandler(req, res, next);
@@ -145,6 +149,11 @@ app.use((req, res, next) => {
 app.use(
   '/files',
   authGate,
+  (req, res, next) => {
+    const relPath = decodeURIComponent(req.path.replace(/^\/+/, ''));
+    if (!canUserSee(req, config, relPath)) return res.status(404).end();
+    next();
+  },
   express.static(config.rootDir, {
     index: false,
     redirect: false,
@@ -154,7 +163,7 @@ app.use(
 );
 
 // Forces a Content-Disposition: attachment download instead of inline viewing.
-app.use('/download', authGate, buildDownloadRouter(config.rootDir));
+app.use('/download', authGate, buildDownloadRouter(config));
 
 // App shell assets (index.html, styles.css, app.js, login/admin pages) are
 // intentionally NOT gated: they're static UI code with no data in them. The
@@ -178,7 +187,7 @@ app.listen(config.port, config.host, () => {
   const displayHost = config.host === '0.0.0.0' ? 'localhost' : config.host;
   console.log(`${config.title} serving "${config.rootDir}"`);
   console.log(`-> http://${displayHost}:${config.port}`);
-  if (!config.openDirectoryMode) {
-    console.log('-> openDirectoryMode is off: login is required (visit /login).');
+  if (config.adminEnabled) {
+    console.log('-> adminEnabled is on: login is required (visit /login).');
   }
 });

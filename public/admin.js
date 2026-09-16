@@ -10,7 +10,7 @@
     settingsForm: el('settings-form'),
     settingsToast: el('settings-toast'),
     title: el('setting-title'),
-    openMode: el('setting-open-mode'),
+    adminEnabled: el('setting-admin-enabled'),
     anonUpload: el('setting-anon-upload'),
     writeEnabled: el('setting-write-enabled'),
     defaultMode: el('setting-default-mode'),
@@ -25,11 +25,19 @@
     newUsername: el('new-username'),
     newPassword: el('new-password'),
     newRole: el('new-role'),
+    newAllowedPaths: el('new-allowed-paths'),
     usersToast: el('users-toast')
   };
 
   let currentUsername = null;
-  let wasOpenMode = false;
+  let wasAdminEnabled = false;
+
+  function parseAllowedPaths(text) {
+    return String(text || '')
+      .split(',')
+      .map((p) => p.trim())
+      .filter(Boolean);
+  }
 
   function showToast(box, message, isError) {
     box.textContent = message;
@@ -79,8 +87,8 @@
     const data = await res.json();
 
     els.title.value = data.title || '';
-    els.openMode.checked = data.openDirectoryMode !== false;
-    wasOpenMode = els.openMode.checked;
+    els.adminEnabled.checked = data.adminEnabled === true;
+    wasAdminEnabled = els.adminEnabled.checked;
     els.anonUpload.checked = !!data.allowAnonymousUpload;
     els.writeEnabled.checked = !!(data.allowWriteAccess && data.allowWriteAccess.enabled);
     els.defaultMode.value = data.allowWriteAccess && data.allowWriteAccess.defaultMode === 'read-write' ? 'read-write' : 'read-only';
@@ -94,19 +102,19 @@
   els.settingsForm.addEventListener('submit', async (e) => {
     e.preventDefault();
 
-    if (els.openMode.checked && !wasOpenMode) {
+    if (!els.adminEnabled.checked && wasAdminEnabled) {
       const ok = window.confirm(
-        'Turning on Open Directory mode removes the login requirement — anyone will be able to browse (and use anonymous upload / write access, if those are on) without signing in. Continue?'
+        'Turning off Admin & accounts removes the login requirement and forces StorageBox into plain, anonymous, read-only mode — anonymous upload and write access will stop working even if left checked below, and this page will no longer be reachable. Continue?'
       );
       if (!ok) {
-        els.openMode.checked = false;
+        els.adminEnabled.checked = true;
         return;
       }
     }
 
     const payload = {
       title: els.title.value.trim(),
-      openDirectoryMode: els.openMode.checked,
+      adminEnabled: els.adminEnabled.checked,
       allowAnonymousUpload: els.anonUpload.checked,
       allowWriteAccess: {
         enabled: els.writeEnabled.checked,
@@ -125,7 +133,7 @@
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || 'Could not save settings.');
-      wasOpenMode = els.openMode.checked;
+      wasAdminEnabled = els.adminEnabled.checked;
       showToast(els.settingsToast, 'Settings saved.', false);
     } catch (err) {
       showToast(els.settingsToast, err.message || 'Could not save settings.', true);
@@ -146,11 +154,49 @@
     if (user.role === 'admin') roleTd.className = 'role-admin';
     tr.appendChild(roleTd);
 
+    const seeTd = document.createElement('td');
+    if (user.role === 'admin') {
+      seeTd.textContent = 'Everything';
+    } else if (!user.allowedPaths || user.allowedPaths.length === 0) {
+      seeTd.textContent = 'Everything';
+    } else {
+      seeTd.textContent = user.allowedPaths.join(', ');
+    }
+    tr.appendChild(seeTd);
+
     const createdTd = document.createElement('td');
     createdTd.textContent = user.createdAt ? new Date(user.createdAt).toLocaleDateString() : '—';
     tr.appendChild(createdTd);
 
     const actionsTd = document.createElement('td');
+
+    if (user.role !== 'admin') {
+      const editAccessBtn = document.createElement('button');
+      editAccessBtn.type = 'button';
+      editAccessBtn.textContent = 'Edit access';
+      editAccessBtn.addEventListener('click', async () => {
+        const current = (user.allowedPaths || []).join(', ');
+        const input = window.prompt(
+          `Visible folders for "${user.username}" (comma-separated, blank = everything):`,
+          current
+        );
+        if (input === null) return;
+        try {
+          const res = await fetch(`/api/admin/users/${encodeURIComponent(user.username)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ allowedPaths: parseAllowedPaths(input) })
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) throw new Error(data.error || 'Could not update access.');
+          showToast(els.usersToast, `Access updated for "${user.username}".`, false);
+          await loadUsers();
+        } catch (err) {
+          showToast(els.usersToast, err.message || 'Could not update access.', true);
+        }
+      });
+      actionsTd.appendChild(editAccessBtn);
+    }
 
     const resetBtn = document.createElement('button');
     resetBtn.type = 'button';
@@ -213,7 +259,8 @@
         body: JSON.stringify({
           username: els.newUsername.value.trim(),
           password: els.newPassword.value,
-          role: els.newRole.value
+          role: els.newRole.value,
+          allowedPaths: parseAllowedPaths(els.newAllowedPaths.value)
         })
       });
       const data = await res.json().catch(() => ({}));
@@ -234,7 +281,7 @@
       if (status.mode !== 'authenticated' || !status.user || status.user.role !== 'admin') {
         els.deniedMessage.textContent =
           status.mode === 'open'
-            ? 'Open Directory mode is on, so there is no login and no admin panel. Turn it off in config.json (allowWriteAccess/openDirectoryMode) to use this page.'
+            ? 'Admin & accounts are disabled, so there is no login and no admin panel. Set "adminEnabled": true in config.json (and create the admin account at /login) to use this page.'
             : status.user
             ? 'Your account is not an admin.'
             : 'You need to be signed in as an admin to view this page.';

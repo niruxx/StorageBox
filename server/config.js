@@ -60,10 +60,14 @@ function loadConfig() {
     rootDir,
     host: typeof parsed.host === 'string' && parsed.host.trim() ? parsed.host : '0.0.0.0',
     port: Number.isInteger(parsed.port) ? parsed.port : 3000,
-    // true (default) = today's anonymous OpenDirectory behavior, no login at
-    // all. false = "storage server" mode: every route requires a session,
-    // and the first visit forces creating an admin account. See server/auth.js.
-    openDirectoryMode: parsed.openDirectoryMode !== false,
+    // false (default) = plain OpenDirectory: anonymous, no login, always
+    // read-only — allowAnonymousUpload/allowWriteAccess are ignored no
+    // matter what they're set to (see server/access.js's effective*
+    // helpers). true = storage-server mode: every route requires a
+    // session, the first visit forces creating an admin account, and only
+    // then do allowAnonymousUpload/allowWriteAccess take effect. See
+    // server/routes/auth.js.
+    adminEnabled: parsed.adminEnabled === true,
     allowAnonymousUpload: parsed.allowAnonymousUpload === true,
     // Kept outside rootDir so the upload log (which contains uploader IPs) is
     // never itself listed/served by the read-only browsing routes.
@@ -78,14 +82,14 @@ function loadConfig() {
 // fields that are safe to change without restarting the process are
 // editable — root/host/port stay file-only, since they're read once at
 // process start (see server/index.js).
-const EDITABLE_KEYS = ['title', 'openDirectoryMode', 'allowAnonymousUpload', 'allowWriteAccess'];
+const EDITABLE_KEYS = ['title', 'adminEnabled', 'allowAnonymousUpload', 'allowWriteAccess'];
 
 function saveConfigPatch(configPath, patch) {
   const current = readRawConfig(configPath);
   const next = { ...current };
 
   if (typeof patch.title === 'string' && patch.title.trim()) next.title = patch.title.trim();
-  if (typeof patch.openDirectoryMode === 'boolean') next.openDirectoryMode = patch.openDirectoryMode;
+  if (typeof patch.adminEnabled === 'boolean') next.adminEnabled = patch.adminEnabled;
   if (typeof patch.allowAnonymousUpload === 'boolean') next.allowAnonymousUpload = patch.allowAnonymousUpload;
   if (patch.allowWriteAccess && typeof patch.allowWriteAccess === 'object') {
     next.allowWriteAccess = sanitizeAllowWriteAccess(patch.allowWriteAccess);
@@ -95,7 +99,7 @@ function saveConfigPatch(configPath, patch) {
 
   return {
     title: next.title,
-    openDirectoryMode: next.openDirectoryMode !== false,
+    adminEnabled: next.adminEnabled === true,
     allowAnonymousUpload: next.allowAnonymousUpload === true,
     allowWriteAccess: sanitizeAllowWriteAccess(next.allowWriteAccess)
   };
