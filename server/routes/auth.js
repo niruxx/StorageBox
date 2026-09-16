@@ -1,5 +1,6 @@
 const express = require('express');
-const { hasAdmin, createUser, verifyUser } = require('../users');
+const { hasAdmin, createUser, verifyUser, publicUser } = require('../users');
+const { liveUser, isAdmin } = require('../access');
 
 const ATTEMPT_WINDOW_MS = 15 * 60 * 1000;
 const MAX_ATTEMPTS = 10;
@@ -35,11 +36,21 @@ function clearAttempts(key) {
 // Gate applied to every data-bearing route (see server/index.js). `config`
 // is the single mutable config object created at boot — reading
 // config.adminEnabled here always reflects the live value, including
-// after an admin flips it from the settings GUI.
+// after an admin flips it from the settings GUI. Re-validates the account
+// behind the session on every request (server/access.js's liveUser) rather
+// than trusting the cached req.session.user snapshot, so a deleted account
+// loses access immediately instead of keeping (or a restricted viewer's
+// session instead *gaining*) access until its cookie expires.
 function requireAuth(config) {
   return (req, res, next) => {
     if (!config.adminEnabled) return next();
-    if (req.session && req.session.user) return next();
+    if (liveUser(req, config)) return next();
+    if (req.session && req.session.user) {
+      // The cookie names an account that no longer exists — clear it now
+      // instead of leaving a cookie that will just keep failing this same
+      // check (and burning a disk read) on every future request.
+      req.session.destroy(() => {});
+    }
     if (req.path.startsWith('/api/')) {
       return res.status(401).json({ error: 'Login required.' });
     }
@@ -47,9 +58,11 @@ function requireAuth(config) {
   };
 }
 
-function requireAdmin(req, res, next) {
-  if (req.session && req.session.user && req.session.user.role === 'admin') return next();
-  return res.status(403).json({ error: 'Admin access required.' });
+function requireAdmin(config) {
+  return (req, res, next) => {
+    if (isAdmin(req, config)) return next();
+    return res.status(403).json({ error: 'Admin access required.' });
+  };
 }
 
 function buildAuthRouter(config) {
@@ -58,7 +71,13 @@ function buildAuthRouter(config) {
   router.get('/status', (req, res) => {
     if (!config.adminEnabled) return res.json({ mode: 'open' });
     if (!hasAdmin(config.usersPath)) return res.json({ mode: 'setup' });
-    if (req.session && req.session.user) return res.json({ mode: 'authenticated', user: req.session.user });
+    // liveUser() returns the raw store record (it includes passwordHash,
+    // which internal authorization checks need to ignore but a JSON
+    // response must never include) — publicUser() strips it before this
+    // goes to the client.
+    const user = liveUser(req, config);
+    if (user) return res.json({ mode: 'authenticated', user: publicUser(user) });
+    if (req.session && req.session.user) req.session.destroy(() => {});
     return res.json({ mode: 'login' });
   });
 

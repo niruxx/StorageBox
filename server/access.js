@@ -60,6 +60,34 @@ function webdavEnabled(config) {
   return !!(writeAccessEnabled(config) && config.allowWriteAccess.webdav);
 }
 
+// ---------- The live account behind a session ----------
+// req.session.user is only ever a snapshot taken at login/setup — it is
+// never updated if the admin later deletes the account, changes its role,
+// or edits its allowedPaths. Every privileged check below re-reads the
+// current record from users.json instead of trusting that snapshot, so:
+//   - a deleted account stops working on its very next request instead of
+//     keeping (or, worse, silently gaining — see below) access until its
+//     30-day cookie expires;
+//   - an allowedPaths edit takes effect immediately, as already documented.
+// Returns null if there's no session, or the account behind it no longer
+// exists — callers must treat null as "not authorized," never as
+// "unrestricted." (An earlier version of this file conflated the two by
+// returning an empty allowedPaths array for a missing user, which is also
+// the sentinel this file uses for "no restriction configured" — that
+// turned account deletion into an unintended privilege escalation for
+// restricted viewers. See canUserSee/canUserReach below.)
+function liveUser(req, config) {
+  if (!config.adminEnabled) return null;
+  const cached = req.session && req.session.user;
+  if (!cached) return null;
+  return findUser(config.usersPath, cached.username);
+}
+
+function isAdmin(req, config) {
+  const user = liveUser(req, config);
+  return !!(user && user.role === 'admin');
+}
+
 // ---------- Role: what a logged-in account can write ----------
 // With adminEnabled off there's no login/role concept at all, so a path's
 // own read-only/read-write rule is the only thing that matters — unchanged
@@ -71,15 +99,13 @@ function webdavEnabled(config) {
 // (server/routes/list.js, info.js).
 function canUserWrite(req, config) {
   if (!config.adminEnabled) return true;
-  return !!(req.session && req.session.user && req.session.user.role === 'admin');
+  return isAdmin(req, config);
 }
 
 // ---------- Role: what a logged-in account can even see ----------
 // An admin always sees everything. A viewer sees everything too *unless*
 // the admin gave them an `allowedPaths` allowlist (server/users.js) — set
-// via the admin GUI's "Visible folders" field. Re-read from disk on every
-// check (not from the session) so an admin's edit takes effect on that
-// user's very next request instead of waiting for them to log in again.
+// via the admin GUI's "Visible folders" field.
 function pathAllowed(allowedPaths, relPath) {
   if (!allowedPaths || allowedPaths.length === 0) return true;
   const norm = normalizeRulePath(relPath);
@@ -97,30 +123,25 @@ function pathReachable(allowedPaths, relPath) {
   return allowedPaths.some((p) => p === norm || p.startsWith(norm + '/'));
 }
 
-function currentViewerAllowedPaths(req, config) {
-  const user = req.session && req.session.user;
-  if (!user || user.role === 'admin') return null; // null = unrestricted
-  const fresh = findUser(config.usersPath, user.username);
-  return fresh ? fresh.allowedPaths : [];
-}
-
 // Full access to a file or directory's contents (used for /files, /download,
 // /api/info, and to decide whether an entry appears at all inside its own
 // parent listing).
 function canUserSee(req, config, relPath) {
   if (!config.adminEnabled) return true;
-  if (!(req.session && req.session.user)) return false;
-  const allowedPaths = currentViewerAllowedPaths(req, config);
-  return allowedPaths === null || pathAllowed(allowedPaths, relPath);
+  const user = liveUser(req, config);
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  return pathAllowed(user.allowedPaths, relPath);
 }
 
 // Can list/navigate into this directory, even if not everything under it is
 // visible (used to gate /api/list's target directory).
 function canUserReach(req, config, relPath) {
   if (!config.adminEnabled) return true;
-  if (!(req.session && req.session.user)) return false;
-  const allowedPaths = currentViewerAllowedPaths(req, config);
-  return allowedPaths === null || pathReachable(allowedPaths, relPath);
+  const user = liveUser(req, config);
+  if (!user) return false;
+  if (user.role === 'admin') return true;
+  return pathReachable(user.allowedPaths, relPath);
 }
 
 module.exports = {
@@ -128,6 +149,8 @@ module.exports = {
   uploadsEnabled,
   writeAccessEnabled,
   webdavEnabled,
+  liveUser,
+  isAdmin,
   canUserWrite,
   canUserSee,
   canUserReach

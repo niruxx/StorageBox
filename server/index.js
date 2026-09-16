@@ -4,7 +4,7 @@ const crypto = require('crypto');
 const express = require('express');
 const session = require('express-session');
 const { loadConfig } = require('./config');
-const { buildAccessResolver, uploadsEnabled, writeAccessEnabled, webdavEnabled, canUserSee } = require('./access');
+const { buildAccessResolver, uploadsEnabled, writeAccessEnabled, webdavEnabled, canUserSee, isAdmin } = require('./access');
 const { buildListRouter } = require('./routes/list');
 const { buildInfoRouter } = require('./routes/info');
 const { buildDownloadRouter } = require('./routes/download');
@@ -117,7 +117,7 @@ app.use('/api/list', authGate, buildListRouter(config, isWritable));
 app.use('/api/info', authGate, buildInfoRouter(config, isWritable));
 app.use(UPLOAD_ROUTE, authGate, buildUploadRouter(config));
 app.use('/api/fs', authGate, buildFsRouter(config, isWritable));
-app.use('/api/admin', requireAdmin, buildAdminRouter(config, accessState));
+app.use('/api/admin', requireAdmin(config), buildAdminRouter(config, accessState));
 
 // Static assets for the in-browser text/code editor (CodeMirror) — harmless
 // to always serve; the editor is simply never opened unless a file is
@@ -137,7 +137,7 @@ app.use((req, res, next) => {
   if (!webdavEnabled(config)) return res.status(404).end();
   authGate(req, res, (err) => {
     if (err) return next(err);
-    if (!(req.session && req.session.user && req.session.user.role === 'admin')) {
+    if (!isAdmin(req, config)) {
       return res.status(403).end();
     }
     webdavHandler(req, res, next);
