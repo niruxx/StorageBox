@@ -12,7 +12,7 @@
   "dependencies": {
     "bcryptjs": "^3.0.3",
     "codemirror": "^5.65.21",
-    "express": "^4.19.2",
+    "express": "^4.22.3",
     "express-session": "^1.19.0",
     "multer": "^2.3.0",
     "webdav-server": "^2.6.3"
