@@ -109,6 +109,25 @@ Edit `config.json`:
 
 `config.json` is gitignored since it's machine-specific (usually pointing outside the repo) — keep `config.example.json` as the template.
 
+## Install & update on Linux
+
+```bash
+git clone https://github.com/niruxx/StorageBox.git && cd StorageBox
+sudo bash install.sh          # interactive; add --yes to accept every default
+```
+
+`install.sh` checks for git/curl/Node.js ≥ 18 (offering to install them), runs `npm ci --omit=dev`, writes a `config.json`, and creates a `storagebox.service` systemd unit it offers to enable and start. Flags: `--dir`, `--data-dir`, `--user`, `--port`, `--root`, `--title`, `--admin`/`--no-admin`, `--no-service`, `--yes` (see `--help`).
+
+**Your data lives outside the code.** By default `config.json`, `users.json`, the session secret, upload logs and the default shared folder go in `/var/lib/storagebox` (the service gets `CONFIG_PATH` pointing there), so updating the code can never touch them. An existing `config.json` is never overwritten by the installer.
+
+```bash
+sudo ./update.sh              # or: sudo bash update.sh
+```
+
+`update.sh` fetches the latest commits and fast-forwards the checkout, reruns `npm ci` only if `package.json`/`package-lock.json` changed, then restarts the service and health-checks it — rolling the code back to the previous commit if the new version doesn't come up. It copies `config.json`/`users.json`/`session-secret.txt`/`log_anonymous.log` into a `backups/` folder next to your config first (keeping the newest 5) and never modifies or deletes the originals or your shared folder. It refuses to run if tracked files in the code directory have local edits (`--stash` to set them aside temporarily). Older installs that keep `config.json` inside the repo folder work too — those files are gitignored, so they're left alone by git.
+
+Useful afterwards: `journalctl -u storagebox -f`, `sudo systemctl restart storagebox`.
+
 ## Configuration changes
 
 If you have an existing `config.json` from before accounts/the admin panel existed, two things changed. Both are one-time edits — `config.example.json` already reflects the new shape.

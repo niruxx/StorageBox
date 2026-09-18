@@ -6,3 +6,4 @@ Thumbs.db
 uploads/
 users.json
 session-secret.txt
+backups/
