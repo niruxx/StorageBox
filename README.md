@@ -227,6 +227,26 @@ npm run dev       # auto-restarts on server code changes (node --watch)
 
 Then open `http://localhost:3000` (or whatever `host`/`port` you set).
 
+### Running on a custom port
+
+The port comes from `config.json` — there's no `PORT` environment variable. Change `port` (and, if you want to limit who can connect, `host`):
+
+```json
+{
+  "port": 8080,
+  "host": "0.0.0.0"
+}
+```
+
+- `host: "0.0.0.0"` listens on all network interfaces; `"127.0.0.1"` only accepts connections from the same machine (use this when a reverse proxy like nginx or Caddy sits in front).
+- **Manual run** — edit `config.json`, restart `npm start`, and open `http://localhost:8080`.
+- **Fresh Linux install** — pass it to the installer: `sudo bash install.sh --port 8080` (or answer the "Port" prompt).
+- **Already-installed Linux service** — edit `port` in the config the service uses (`/var/lib/storagebox/config.json` by default), then `sudo systemctl restart storagebox`. `update.sh` reads the new port for its health check automatically.
+- **Ports below 1024** (80, 443, ...) need extra privileges on Linux. The installer grants them to the service when you pick such a port at install time; if you change to one later, set `port` in the config first and then re-run `sudo bash install.sh` (it keeps your existing config and regenerates the service file with the needed permission; answer yes to replacing it), or simply keep a high port and put a reverse proxy on 80/443.
+- Open the port in your firewall if other machines need to reach it (e.g. `sudo ufw allow 8080/tcp`).
+- **Two instances on different ports** — give each its own config file and start them with `CONFIG_PATH`: `CONFIG_PATH=/path/to/second-config.json npm start`. Each config needs its own `port` (and its own `root`).
+- The port isn't editable from the `/admin` panel: like `root` and `host`, it's only read when the server starts, so it's a config-file change plus a restart.
+
 ## How it works
 
 - `server/` — Express app:
